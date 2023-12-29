@@ -81,7 +81,6 @@ saveLabyrinth :: proc(filename : string, labyrinth : ^Labyrinth) -> bool {
     return true
 }
 
-
 readBufferValue :: proc(buffer : [] u8, length : int) -> i32 {
     return i32(strconv.atoi(string(buffer[:length])))
 }

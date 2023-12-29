@@ -2,9 +2,6 @@ package main
 
 import SDL "vendor:sdl2"
 import mu "vendor:microui"
-
-import "core:fmt"
-import "core:mem"
 import "core:math"
 
 Direction :: enum {
