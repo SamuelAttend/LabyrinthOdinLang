@@ -9,11 +9,35 @@ BYTE_SIZE :: 8
 
 BitMask :: [dynamic] bit_set[0..<BYTE_SIZE]
 
-Method :: proc(^Path, ^Path, ^Labyrinth, ^Coords, ^Coords)
+Method :: proc(^Path, i32, ^Labyrinth, ^Coords, ^Coords) -> i32
 
 Methods := [] Method {
     methodOfWiener,
     methodOfTerry
+}
+
+Logic :: struct {
+    labyrinth : Labyrinth,
+    path : Path,
+    coords : struct {
+        start, finish : Coords
+    },
+    method : Method,
+    step : i32,
+    maxstep : i32
+}
+
+initLogic :: proc(logic : ^Logic) {
+    using logic 
+
+    method = methodOfWiener
+}
+
+destroyLogic :: proc(logic : ^Logic) {
+    using logic
+
+    delete(path)
+    destroyLabyrinth(&labyrinth)
 }
 
 generateIntValue :: proc(limit : i32) -> i32 {
@@ -149,30 +173,24 @@ resizeLabyrinth :: proc(labyrinth : ^Labyrinth, height, width : i32) {
     initLabyrinth(labyrinth, height, width)
 }
 
-findSolution :: proc(path, history : ^Path, labyrinth : ^Labyrinth, start, finish : ^Coords, method : Method) -> bool {
+findPath :: proc(path : ^Path, step : i32, labyrinth : ^Labyrinth, start, finish : ^Coords, method : Method) -> i32 {
     using labyrinth
 
-    clearSolution(path, history)
+    clear(path)
 
     if (!checkCoordsInBounds(start, &size) || !checkCoordsInBounds(finish, &size)) {
-        return false
+        return 0
     }
 
     if start^ == finish^ {
         append(path, start^)
-        append(history, start^)
-        return true
+        return 0
     }
-    method(path, history, labyrinth, start, finish)
-    return true
+
+    return method(path, step, labyrinth, start, finish)
 }
 
-clearSolution :: proc(path, history : ^Path) {
-    clear(path)
-    clear(history)
-}
-
-methodOfWiener :: proc(path, history : ^Path, labyrinth : ^Labyrinth, start : ^Coords, finish : ^Coords) {
+methodOfWiener :: proc(path : ^Path, step : i32, labyrinth : ^Labyrinth, start : ^Coords, finish : ^Coords) -> i32 {
     using labyrinth
 
     visited := make(BitMask, int(math.ceil(f32(size.y * size.x) / BYTE_SIZE)))
@@ -182,9 +200,9 @@ methodOfWiener :: proc(path, history : ^Path, labyrinth : ^Labyrinth, start : ^C
     append(path, current)
     setBitMaskValue(&visited, &current, &size, true)
 
-    for {
-        append(history, path[len(path) - 1])
-
+    i : i32
+    for i != step {
+        i += 1
         proceedable := false
         for direction in Direction {
             if direction in directions[current.y][current.x] {
@@ -195,8 +213,7 @@ methodOfWiener :: proc(path, history : ^Path, labyrinth : ^Labyrinth, start : ^C
                     append(path, current)
                     setBitMaskValue(&visited, &next, &size, true)
                     if current == finish^ {
-                        append(history, current)
-                        return
+                        return i
                     }
                     break
                 }
@@ -207,9 +224,10 @@ methodOfWiener :: proc(path, history : ^Path, labyrinth : ^Labyrinth, start : ^C
             current = path[len(path) - 1]
         }
     }
+    return i
 }
 
-methodOfTerry :: proc(path, history : ^Path, labyrinth : ^Labyrinth, start : ^Coords, finish : ^Coords) {
+methodOfTerry :: proc(path : ^Path, step : i32, labyrinth : ^Labyrinth, start : ^Coords, finish : ^Coords) -> i32 {
     using labyrinth
 
     traveled := make([][] DirectionSet, size.y)
@@ -226,9 +244,9 @@ methodOfTerry :: proc(path, history : ^Path, labyrinth : ^Labyrinth, start : ^Co
     current := start^
     append(path, current)
 
-    for {
-        append(history, path[len(path) - 1])
-
+    i : i32
+    for i != step {
+        i += 1
         proceedable := false
         for direction in Direction {
             if direction in directions[current.y][current.x] {
@@ -240,8 +258,7 @@ methodOfTerry :: proc(path, history : ^Path, labyrinth : ^Labyrinth, start : ^Co
                         current = next
                         append(path, current)
                         if current == finish^ {
-                            append(history, current)
-                            return
+                            return i
                         }
                         break
                     }
@@ -255,5 +272,6 @@ methodOfTerry :: proc(path, history : ^Path, labyrinth : ^Labyrinth, start : ^Co
             direction := CoordsDirection[current - removed]
             traveled[removed.y][removed.x] += {direction}
         }
-    }    
+    }
+    return i
 }

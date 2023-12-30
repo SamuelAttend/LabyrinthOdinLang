@@ -37,26 +37,23 @@ Labyrinth :: struct {
 
 Program :: struct {
     quit : bool,
-    ui : UI,
-    labyrinth : Labyrinth,
-    path : Path,
-    history : Path,
+    logic : Logic,
+    ui : UI
 }
 
 initProgram :: proc(program : ^Program) {
     using program
 
     assert(SDL.Init(SDL.INIT_VIDEO) == 0, SDL.GetErrorString())
+    initLogic(&logic)
     initUI(&ui)
 }
 
 destroyProgram :: proc(program :^ Program) {
     using program
 
-    delete(path)
-    delete(history)
-    destroyLabyrinth(&labyrinth)
     destroyUI(&ui)
+    destroyLogic(&logic)
     SDL.Quit()
 }
 
@@ -72,8 +69,8 @@ main :: proc() {
         handleInputEvent(&program)
 
         mu.begin(ui.ctx)
-        handleMenuWindow(&ui, &labyrinth, &path, &history)
-        handleFieldWindow(&ui, &labyrinth)
+        handleMenuWindow(&ui, &logic)
+        handleFieldWindow(&ui, &logic)
         mu.end(ui.ctx)
 
         current := SDL.GetTicks()
@@ -81,9 +78,8 @@ main :: proc() {
             start = current
         
             startRender(&ui)
-            renderLabyrinth(&labyrinth, &ui)
-            renderPath(&path, &ui)
-            renderCommands(&ui)
+            renderField(&ui, &logic)
+            renderMenu(&ui)
             finishRender(&ui)
         }
     }

@@ -55,9 +55,7 @@ UI :: struct {
         },
         solution : struct {
             start : [2] Textbox,
-            finish : [2] Textbox,
-            method : Method,
-            step : i32
+            finish : [2] Textbox
         },
         log : struct {
             data : string,
@@ -116,8 +114,6 @@ initUI :: proc(ui : ^UI) {
 
     slider = {DEFAULT_SLIDER_VALUE, false}
 
-    menu.solution.method = methodOfWiener
-
     field = {
         scale = DEFAULT_FIELD_SCALE
     }
@@ -172,6 +168,13 @@ generateCorridorRect :: proc(room : ^SDL.Rect, direction : Direction) -> SDL.Rec
                     }
     }
     unreachable()
+}
+
+renderField :: proc(ui : ^UI, logic : ^Logic) {
+    using logic
+
+    renderLabyrinth(&labyrinth, ui)
+    renderPath(&path, ui)
 }
 
 renderLabyrinth :: proc(labyrinth : ^Labyrinth, ui : ^UI) {
@@ -242,7 +245,7 @@ renderText :: proc(text : string, ui : ^UI, coords : ^Coords, color : ^mu.Color)
     }
 }
 
-renderCommands :: proc(ui : ^UI) {
+renderMenu :: proc(ui : ^UI) {
     cmd : ^mu.Command
     for variant in mu.next_command_iterator(ui.ctx, &cmd) {
         switch cmd in variant {
@@ -264,7 +267,7 @@ renderCommands :: proc(ui : ^UI) {
     }
 }
 
-handleMenuWindow :: proc(ui : ^UI, labyrinth : ^Labyrinth, path, history : ^Path) {
+handleMenuWindow :: proc(ui : ^UI, logic : ^Logic) {
     w, h : i32
     SDL.GetWindowSize(ui.window, &w, &h)
 
@@ -295,20 +298,21 @@ handleMenuWindow :: proc(ui : ^UI, labyrinth : ^Labyrinth, path, history : ^Path
 
             mu.layout_row(ui.ctx, {-1}, 0)
             if .SUBMIT in mu.button(ui.ctx, "Generate") {
-                clearSolution(path, history)
+                clear(&logic.path)
+                logic.maxstep = 0
 
                 height := readBufferValue(ui.menu.size.height.buffer[:], ui.menu.size.height.length)
                 width := readBufferValue(ui.menu.size.width.buffer[:], ui.menu.size.width.length)
 
-                resizeLabyrinth(labyrinth, height, width)
-                if generateLabyrinth(labyrinth) {
+                resizeLabyrinth(&logic.labyrinth, height, width)
+                if generateLabyrinth(&logic.labyrinth) {
                     addLog(ui, "Labyrinth is generated.\n")
                 }
                 else {
                     addLog(ui, "Labyrinth is cleared.\n")
                 }
 
-                adjustFieldScale(ui, labyrinth)
+                adjustFieldScale(ui, &logic.labyrinth)
             }
         }
 
@@ -319,10 +323,11 @@ handleMenuWindow :: proc(ui : ^UI, labyrinth : ^Labyrinth, path, history : ^Path
 
             mu.layout_row(ui.ctx, {-1}, 0)
             if .SUBMIT in mu.button(ui.ctx, "Load") {
-                clearSolution(path, history)
+                clear(&logic.path)
+                logic.maxstep = 0
 
                 filename := string(ui.menu.file.filename.buffer[:ui.menu.file.filename.length])
-                if loadLabyrinth(filename, labyrinth) {
+                if loadLabyrinth(filename, &logic.labyrinth) {
                     msg := strings.concatenate({"File '", filename, "' is successfully loaded.\n"})
                     defer delete(msg)
                     addLog(ui, msg)
@@ -332,11 +337,11 @@ handleMenuWindow :: proc(ui : ^UI, labyrinth : ^Labyrinth, path, history : ^Path
                     defer delete(msg)
                     addLog(ui, msg)
                 }
-                adjustFieldScale(ui, labyrinth)
+                adjustFieldScale(ui, &logic.labyrinth)
             }
             if .SUBMIT in mu.button(ui.ctx, "Save") {
                 filename := string(ui.menu.file.filename.buffer[:ui.menu.file.filename.length])
-                if saveLabyrinth(filename, labyrinth) {
+                if saveLabyrinth(filename, &logic.labyrinth) {
                     msg := strings.concatenate({"File '", filename, "' is successfully saved.\n"})
                     defer delete(msg)
                     addLog(ui, msg)
@@ -364,7 +369,7 @@ handleMenuWindow :: proc(ui : ^UI, labyrinth : ^Labyrinth, path, history : ^Path
 
             mu.layout_row(ui.ctx, {-1}, 0)
             if .SUBMIT in mu.button(ui.ctx, "Adjust") {
-                adjustFieldScale(ui, labyrinth)
+                adjustFieldScale(ui, &logic.labyrinth)
             }
         }
 
@@ -388,46 +393,54 @@ handleMenuWindow :: proc(ui : ^UI, labyrinth : ^Labyrinth, path, history : ^Path
             if .ACTIVE in mu.begin_treenode(ui.ctx, "Method", mu.Options {.CLOSED}) {
                 for method in Methods {
                     if .SUBMIT in mu.button(ui.ctx, MethodName[method]) {
-                        ui.menu.solution.method = method
+                        logic.method = method
                     }
                 }
                 mu.end_treenode(ui.ctx)
             }
 
-            solve := strings.concatenate({"Solve ( ", MethodName[ui.menu.solution.method], " )"})
+            solve := strings.concatenate({"Solve ( ", MethodName[logic.method], " )"})
             defer delete(solve)
             if .SUBMIT in mu.button(ui.ctx, solve) {
-                start := Coords {
+                logic.coords.start = {
                     readBufferValue(ui.menu.solution.start.x.buffer[:], ui.menu.solution.start.x.length),
                     readBufferValue(ui.menu.solution.start.y.buffer[:], ui.menu.solution.start.y.length)
                 }
-                finish := Coords {
+                logic.coords.finish = {
                     readBufferValue(ui.menu.solution.finish.x.buffer[:], ui.menu.solution.finish.x.length),
                     readBufferValue(ui.menu.solution.finish.y.buffer[:], ui.menu.solution.finish.y.length)
                 }
-                if findSolution(path, history, labyrinth, &start, &finish, ui.menu.solution.method) {
+                logic.maxstep = findPath(&logic.path, -1, &logic.labyrinth, &logic.coords.start, &logic.coords.finish, logic.method)
+                logic.step = logic.maxstep
+                if len(logic.path) > 0 {
                     addLog(ui, "Solution is found.\n")
-                    ui.menu.solution.step = i32(len(history) - 1)
                 }
                 else {
                     addLog(ui, "Coords are out of bounds.\n")
                 }
             }
 
-            if len(history) >= 1 {
+            if logic.maxstep > 0 {
                 if .ACTIVE in mu.begin_treenode(ui.ctx, "Steps", mu.Options {.CLOSED}) {
-                    last := ui.menu.solution.step
+                    buffers: [2][32] byte
+                    steps := strings.concatenate({
+                        strconv.itoa(buffers.x[:], int(logic.step)),
+                        " / ",
+                        strconv.itoa(buffers.y[:], int(logic.maxstep))})
+                    defer delete(steps)
+                    mu.label(ui.ctx, steps)
+
+                    last := logic.step
                     if .SUBMIT in mu.button(ui.ctx, "Previous") {
-                        ui.menu.solution.step -= 1
+                        logic.step -= 1
                     }
                     if .SUBMIT in mu.button(ui.ctx, "Next") {
-                        ui.menu.solution.step += 1
-
+                        logic.step += 1
                     }
                     
-                    if last != ui.menu.solution.step {
-                        ui.menu.solution.step = clamp(ui.menu.solution.step, 0, i32(len(history) - 1))
-                        findSolution(path, nil, labyrinth, &path[0], &history[ui.menu.solution.step], ui.menu.solution.method)
+                    if last != logic.step {
+                        logic.step = clamp(logic.step, 0, logic.maxstep)
+                        findPath(&logic.path, logic.step, &logic.labyrinth, &logic.coords.start, &logic.coords.finish, logic.method)
                     }
                     mu.end_treenode(ui.ctx)
                 }
@@ -457,7 +470,7 @@ handleMenuWindow :: proc(ui : ^UI, labyrinth : ^Labyrinth, path, history : ^Path
     }
 }
 
-handleFieldWindow :: proc(ui : ^UI, labyrinth : ^Labyrinth) {
+handleFieldWindow :: proc(ui : ^UI, logic : ^Logic) {
     w, h : i32
     SDL.GetWindowSize(ui.window, &w, &h)
 
@@ -508,7 +521,7 @@ handleFieldWindow :: proc(ui : ^UI, labyrinth : ^Labyrinth) {
         }
 
         if .RIGHT in ui.ctx.mouse_down_bits {
-            adjustFieldScale(ui, labyrinth)
+            adjustFieldScale(ui, &logic.labyrinth)
         }
 
         mu.end_window(ui.ctx)
