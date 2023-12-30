@@ -4,37 +4,6 @@ import SDL "vendor:sdl2"
 import mu "vendor:microui"
 import "core:math"
 
-Direction :: enum {
-    North,
-    East,
-    South,
-    West
-}
-
-Coords :: [2] i32
-
-DirectionCoords := map [Direction] Coords {
-    .North = {0, -1},
-    .East = {+1, 0},
-    .South = {0, +1},
-    .West = {-1, 0},
-}
-CoordsDirection := map [Coords] Direction {
-    {0, -1} = .North,
-    {+1, 0} = .East,
-    {0, +1} = .South,
-    {-1, 0} = .West
-}
-
-DirectionSet :: bit_set[Direction; u8]
-
-Path :: [dynamic] Coords
-
-Labyrinth :: struct {
-    directions : [dynamic][dynamic] DirectionSet,
-    size : Coords
-}
-
 Program :: struct {
     quit : bool,
     logic : Logic,
