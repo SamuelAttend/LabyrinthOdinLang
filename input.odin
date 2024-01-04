@@ -50,8 +50,16 @@ loadLabyrinth :: proc(filename : string, labyrinth : ^Labyrinth) -> bool {
     }
     defer delete(data)
 
+    if len(data) < HEADER_SIZE {
+        return false
+    }
+
     height := i32((u32(data[3]) << 24) | (u32(data[2]) << 16) | (u32(data[1]) << 8) | u32(data[0]))
     width := i32((u32(data[7]) << 24) | (u32(data[6]) << 16) | (u32(data[5]) << 8) | u32(data[4]))
+
+    if len(data) < int(HEADER_SIZE + width * height) {
+        return false
+    }
 
     resizeLabyrinth(labyrinth, height, width)
     for i in 0..<height {
